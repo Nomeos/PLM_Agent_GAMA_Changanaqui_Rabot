@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="ASCII"?>
+<xmi:XMI xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:al="http://eclipse.org/graphiti/mm/algorithms" xmlns:gama="http://gama/1.0" xmlns:pi="http://eclipse.org/graphiti/mm/pictograms">
+  <pi:Diagram visible="true" gridUnit="10" diagramTypeId="gamaDiagram" name="ClassDiagramAgents" snapToGrid="true" pictogramLinks="/0/@children.0/@link /0/@children.0/@children.1/@link /0/@children.0/@children.2/@link /0/@children.0/@children.3/@link /0/@children.1/@link /0/@children.1/@children.1/@link /0/@children.1/@children.2/@link /0/@connections.0/@link" version="0.19.0">
+    <graphicsAlgorithm xsi:type="al:Rectangle" background="/0/@colors.1" foreground="/0/@colors.0" lineWidth="1" transparency="0.0" width="1000" height="1000"/>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:RoundedRectangle" background="/0/@colors.3" foreground="/0/@colors.2" lineWidth="2" transparency="0.0" width="220" height="100" x="100" y="50" cornerHeight="5" cornerWidth="5"/>
+      <link businessObjects="/1"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.0"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Polyline" foreground="/0/@colors.4" lineWidth="2" filled="false" transparency="0.0">
+          <points y="20"/>
+          <points x="220" y="20"/>
+        </graphicsAlgorithm>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Text" foreground="/0/@colors.4" lineWidth="1" filled="false" transparency="0.0" width="220" height="20" font="/0/@fonts.1" horizontalAlignment="ALIGNMENT_CENTER" value="world"/>
+        <link businessObjects="/1"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Text" foreground="/0/@colors.4" lineWidth="1" filled="false" transparency="0.0" width="220" height="25" x="5" y="25" font="/0/@fonts.2" verticalAlignment="ALIGNMENT_TOP" value=""/>
+        <link businessObjects="/1"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="30" height="15" x="5" y="3" id="gama.ui.diagram.subspecieslink" stretchH="false" stretchV="false" proportional="false"/>
+        <link businessObjects="/1"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:RoundedRectangle" background="/0/@colors.5" foreground="/0/@colors.2" lineWidth="2" transparency="0.0" width="150" height="50" x="400" y="25" cornerHeight="5" cornerWidth="5"/>
+      <link businessObjects="/2"/>
+      <anchors xsi:type="pi:ChopboxAnchor" incomingConnections="/0/@connections.0"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Polyline" foreground="/0/@colors.4" lineWidth="2" filled="false" transparency="0.0">
+          <points y="20"/>
+          <points x="150" y="20"/>
+        </graphicsAlgorithm>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Text" foreground="/0/@colors.4" lineWidth="1" filled="false" transparency="0.0" width="150" height="20" font="/0/@fonts.1" horizontalAlignment="ALIGNMENT_CENTER" value="my_GUI_xp"/>
+        <link businessObjects="/2"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="15" height="15" x="5" y="3" id="gama.ui.diagram.guixplink" stretchH="false" stretchV="false" proportional="false"/>
+        <link businessObjects="/2"/>
+      </children>
+    </children>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.0/@anchors.0" end="/0/@children.1/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" foreground="/0/@colors.4" lineWidth="2" filled="false" transparency="0.0"/>
+      <link businessObjects="/3"/>
+      <connectionDecorators visible="true" active="true" locationRelative="true" location="0.5">
+        <graphicsAlgorithm xsi:type="al:Text" foreground="/0/@colors.4" lineWidth="1" filled="false" transparency="0.0" x="10" value="possible experiment"/>
+      </connectionDecorators>
+    </connections>
+    <colors red="227" green="238" blue="249"/>
+    <colors red="255" green="255" blue="255"/>
+    <colors green="255"/>
+    <colors red="255" green="255" blue="210"/>
+    <colors/>
+    <colors red="135" green="206" blue="250"/>
+    <fonts name="Arial" size="8"/>
+    <fonts name="Arial" size="12" bold="true"/>
+    <fonts name="Arial" size="12"/>
+  </pi:Diagram>
+  <gama:EWorldAgent name="world" experimentLinks="/3" init="">
+    <colorPicto>255</colorPicto>
+    <colorPicto>255</colorPicto>
+    <colorPicto>210</colorPicto>
+    <facets name="torus" value=""/>
+    <facets name="schedules" value=""/>
+    <facets name="control" value="reflex"/>
+    <facets name="frequency" value=""/>
+  </gama:EWorldAgent>
+  <gama:EGUIExperiment name="my_GUI_xp" error="" experimentLink="/3">
+    <colorPicto>135</colorPicto>
+    <colorPicto>206</colorPicto>
+    <colorPicto>250</colorPicto>
+  </gama:EGUIExperiment>
+  <gama:EExperimentLink species="/1" experiment="/2"/>
+</xmi:XMI>
