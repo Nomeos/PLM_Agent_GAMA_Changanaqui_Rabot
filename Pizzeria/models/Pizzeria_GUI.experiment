@@ -1,0 +1,43 @@
+/**
+* Name: Pizzeria_GUI
+* This wizard creates a new experiment file. 
+* Author: root
+* Tags: 
+*/
+model Pizzeria_GUI
+
+import "Pizzeria.gaml"
+import "Cook.gaml"
+import "Machine.gaml"
+
+experiment "Pizzeria_GUI"  type:gui {
+	/** Insert here the definition of the inputs and outputs of the model */
+	
+	/** Parameters can be used to input values to the model **/
+	// parameter "First parameter" var: an_attribute_of_the_model <- an_expression;
+	parameter "Number of customers" var: nb_customers min: 1 max: 30 init: 10;
+	
+	output {
+    	/** monitors can be used to output values, either in the UI or in a file **/
+		// monitor "m1" value: an_expression;
+        display main type: 2d background: #whitesmoke {
+
+            graphics "background" {
+                draw rectangle(width, height) at: {width/2, height/2}
+                    color: #blue border: #yellow;
+                    
+                // Sidewalk
+                draw rectangle(width, 50) at: {width/2,0} color: #red border: #gray;
+                // Entrance
+                draw rectangle(40, 10) at: entrance_door color: #green;
+                // Kitchen
+                draw rectangle(width, 90) at: {width/2, height-40} color: #purple;
+            }
+
+            species Table aspect: base;
+            species Machine aspect: base;
+            species Cook aspect: base;
+            species Customer aspect: base;
+        }
+    }
+}
