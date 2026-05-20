@@ -15,7 +15,9 @@ species Customer skills: [moving, simple_bdi] {
      ****************************************/
 
     // --- Identity ---
-    string customer_type <- "regular";
+    string customer_type;
+    int max_food_wait;
+	float annoyance_factor;
 
     // --- Movement / Position ---
     point target;
@@ -23,9 +25,9 @@ species Customer skills: [moving, simple_bdi] {
     bool is_in <- false;
 
     // --- Needs / Satisfaction ---
-    float patience <- 80.0;
-    float satisfaction <- 100.0;
-    float hunger <- 100.0;
+    int patience;
+    int satisfaction;
+    int hunger;
 
     // --- Timers ---
     float waiting_time <- 0.0;
@@ -43,6 +45,7 @@ species Customer skills: [moving, simple_bdi] {
 
     // --- Table Management ---
     Table assigned_table <- nil;
+    point seat_position <- nil;
 
     // --- Visual ---
     float radius <- 2.0;
@@ -52,9 +55,70 @@ species Customer skills: [moving, simple_bdi] {
      ****************************************/
 
     init {
-        state <- "going_to_door";
-        target <- door_location;
-    }
+
+	    state <- "going_to_door";
+	    target <- door_location;
+	
+	    customer_type <- one_of([
+	        "regular",
+	        "vip",
+	        "impatient",
+	        "foodie"
+	    ]);
+	
+	    switch customer_type {
+	
+	        // CLIENT NORMAL
+	        match "regular" {
+	
+	            patience <- rnd(80,120);
+	
+	            max_food_wait <- rnd(60,90);
+	
+	            annoyance_factor <- 1.0;
+	
+	            hunger <- rnd(40,90);
+	        }
+	
+	        // CLIENT VIP
+	        match "vip" {
+	
+	            patience <- rnd(120,180);
+	
+	            max_food_wait <- rnd(90,140);
+	
+	            annoyance_factor <- 1.5;
+	
+	            satisfaction <- 120;
+	
+	            hunger <- rnd(50,100);
+	        }
+	
+	        // CLIENT IMPATIENT
+	        match "impatient" {
+	
+	            patience <- rnd(40,70);
+	
+	            max_food_wait <- rnd(25,45);
+	
+	            annoyance_factor <- 2.5;
+	
+	            hunger <- rnd(70,100);
+	        }
+	
+	        // FOODIE
+	        match "foodie" {
+	
+	            patience <- rnd(100,160);
+	
+	            max_food_wait <- rnd(70,120);
+	
+	            annoyance_factor <- 2.0;
+	
+	            hunger <- rnd(80,100);
+	        }
+	    }
+	}
 
     /****************************************
      *        MOVE TO RESTAURANT
@@ -182,8 +246,8 @@ species Customer skills: [moving, simple_bdi] {
 
             // Search for a free table
             Table free_table <- one_of(
-                Table where (each.capacity > 0)
-            );
+			    Table where (each.has_free_seat())
+			);
 
             // Table found
             if free_table != nil {
@@ -191,9 +255,14 @@ species Customer skills: [moving, simple_bdi] {
                 assigned_table <- free_table;
 
                 // Reserve one seat
-                assigned_table.capacity <- assigned_table.capacity - 1;
+                assigned_table.occupied_seats <- assigned_table.occupied_seats + 1;
+				
+				seat_position <- assigned_table.location +
+				    assigned_table.seat_positions[
+				        assigned_table.occupied_seats - 1
+				    ];
 
-                state <- "waiting_food";
+                state <- "going_to_table";
 
             } else {
 
@@ -201,7 +270,9 @@ species Customer skills: [moving, simple_bdi] {
                 takeaway <- true;
 
                 // Customer is disappointed
-                satisfaction <- satisfaction - 15;
+                do change_satisfaction(
+                	-(10 * annoyance_factor)
+                );
 
                 state <- "waiting_food";
             }
@@ -212,6 +283,20 @@ species Customer skills: [moving, simple_bdi] {
             state <- "waiting_food";
         }
     }
+    
+    reflex go_to_table
+	when: state = "going_to_table" {
+	
+	    if seat_position != nil {
+	
+	        do goto target: seat_position speed: 1.5;
+	
+	        if distance_to(location, seat_position) < 1 {
+	
+	            state <- "seated";
+	        }
+	    }
+	}
 
     /****************************************
      *        WAITING FOR THE FOOD
@@ -226,20 +311,26 @@ species Customer skills: [moving, simple_bdi] {
 
     // Waiting logic
     reflex wait_food
-    when: state = "waiting_food" and every(1#cycle) {
-
-        food_waiting_time <- food_waiting_time + 1;
-
-        // Too much waiting lowers satisfaction
-        if food_waiting_time > 30 {
-            satisfaction <- satisfaction - 20;
-        }
-
-        // Customer leaves if waiting too long
-        if food_waiting_time > 60 {
-            state <- "leaving";
-        }
-    }
+	when: state = "seated" or state = "waiting_food" and every(1#cycle) {
+	
+	    food_waiting_time <- food_waiting_time + 1;
+	
+	    // Perte progressive après un certain temps
+	    if food_waiting_time > (max_food_wait * 0.5) {
+	
+	        do change_satisfaction(
+	            -(0.2 * annoyance_factor)
+	        );
+	    }
+	
+	    // Trop attendu -> rage quit
+	    if food_waiting_time > max_food_wait {
+	
+	        do change_satisfaction(-25 * annoyance_factor);
+	
+	        state <- "leaving";
+	    }
+	}
 
     /****************************************
      *               EATING
@@ -256,24 +347,9 @@ species Customer skills: [moving, simple_bdi] {
 
             // Free table seat
             if assigned_table != nil {
-                assigned_table.capacity <- assigned_table.capacity + 1;
+            	assigned_table.occupied_seats <- assigned_table.occupied_seats - 1;
             }
 
-            state <- "leaving";
-        }
-    }
-
-    /****************************************
-     *         GENERIC WAIT STATE
-     ****************************************/
-
-    reflex wait
-    when: state = "waiting" and every(2#cycle) {
-
-        waiting_time <- waiting_time + 1.0;
-
-        // Customer loses patience
-        if waiting_time > patience {
             state <- "leaving";
         }
     }
@@ -288,9 +364,9 @@ species Customer skills: [moving, simple_bdi] {
         // --- Customer exits building first ---
         if is_in {
 
-            target <- entrance_door;
+            target <- entrance.location;
 
-            if distance_to(location, target) < 2.0 {
+            if distance_to(location, target) < 4.0 {
                 is_in <- false;
             }
 
@@ -313,30 +389,86 @@ species Customer skills: [moving, simple_bdi] {
 
                 // Remove customer from simulation
                 if distance_to(location, target) < 2.0 {
+                	
+                	served_customers <- served_customers + 1;
+
+					restaurant_rating <- (
+					    ((restaurant_rating * (served_customers - 1)) + satisfaction)
+					    / served_customers
+					);
+                	
                     do die;
                 }
             }
         }
     }
+    
+    action change_satisfaction(int amount) {
+
+	    satisfaction <- satisfaction + amount;
+	
+	    if satisfaction > 100 {
+	        satisfaction <- 100;
+	    }
+	
+	    if satisfaction < 0 {
+	        satisfaction <- 0;
+	    }
+	}
 
     /****************************************
      *             VISUALS
      ****************************************/
 
     aspect base {
-
-        rgb col <- #red;
-
-        // Waiting customers
-        if (state = "waiting") {
-            col <- #orange;
-        }
-
-        // Eating customers
-        else if (state = "eating") {
-            col <- #limegreen;
-        }
-
-        draw circle(2.0) color: col border: #white;
-    }
+	
+	    rgb col <- #gray;
+	
+	    // ========= TYPE =========
+	
+	    switch customer_type {
+	
+	        match "regular" {
+	            col <- #dodgerblue;
+	        }
+	
+	        match "vip" {
+	            col <- #gold;
+	        }
+	
+	        match "impatient" {
+	            col <- #crimson;
+	        }
+	
+	        match "foodie" {
+	            col <- #mediumorchid;
+	        }
+	    }
+	
+	    // ========= ETAT =========
+	
+	    if state = "reading_menu" {
+	        col <- darker(col);
+	    }
+	
+	    if state = "waiting_food" {
+	        col <- #orange;
+	    }
+	
+	    if state = "eating" {
+	        col <- #limegreen;
+	    }
+	
+	    if state = "leaving" {
+	
+	        // rouge/noir si vraiment énervé
+	        if satisfaction < 30 {
+	            col <- #black;
+	        } else {
+	            col <- #darkred;
+	        }
+	    }
+	
+	    draw circle(radius) color: col border: #white;
+	}
 }

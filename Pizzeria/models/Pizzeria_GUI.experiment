@@ -15,7 +15,7 @@ experiment "Pizzeria_GUI"  type:gui {
 	
 	/** Parameters can be used to input values to the model **/
 	// parameter "First parameter" var: an_attribute_of_the_model <- an_expression;
-	parameter "Number of customers" var: nb_customers min: 1 max: 30 init: 10;
+	parameter "Number of customers" var: nb_customers min: 1 max: 50 init: 10;
 	
 	output {
     	/** monitors can be used to output values, either in the UI or in a file **/
@@ -24,14 +24,16 @@ experiment "Pizzeria_GUI"  type:gui {
 
             graphics "background" {
                 draw rectangle(width, height) at: {width/2, height/2}
-                    color: #blue border: #yellow;
+                   color: #blue border: #yellow;
                     
                 // Sidewalk
-                draw rectangle(width, 50) at: {width/2,0} color: #red border: #gray;
-                // Entrance
-                draw rectangle(40, 10) at: entrance_door color: #green;
+                draw sidewalk color: #red border: #gray;
                 // Kitchen
-                draw rectangle(width, 90) at: {width/2, height-40} color: #purple;
+                draw kitchen color: #pink;
+                // Dining_area
+                draw dining_area color: #orange;
+                // Entrance
+                draw entrance color: #green;
             }
 
             species Table aspect: base;
