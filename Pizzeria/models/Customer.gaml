@@ -327,6 +327,12 @@ species Customer skills: [moving, simple_bdi] {
 	    if food_waiting_time > max_food_wait {
 	
 	        do change_satisfaction(-25 * annoyance_factor);
+	        
+	        if state = "seated" {
+	        	if assigned_table != nil {
+            		assigned_table.occupied_seats <- assigned_table.occupied_seats - 1;
+            	}
+	        }
 	
 	        state <- "leaving";
 	    }
