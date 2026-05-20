@@ -19,6 +19,19 @@ global {
     list<Customer> waiting_queue <- [];
     int queue_capacity <- 8;
     int spawn_every <- 5; 
+    
+    map<string, int> menu <- [
+	    "pizza_margherita"::15,
+	    "pizza_pepperoni"::18,
+	    "salad"::10,
+	    "drink"::5,
+	    "menu_deluxe"::25
+	];
+	
+	list<map> pending_orders <- [];
+	point takeaway_waiting_area <- {width/2, 40};
+	    
+    list<string> customer_types <- ["regular", "vip", "impatient", "foodie"];
 
     init {    	
         create Table number: 5 {
@@ -27,8 +40,7 @@ global {
         }
 
         create Customer number: nb_customers {
-            patience <- rnd(50.0, 100.0);
-            satisfaction <- 100.0;
+            customer_type <- one_of(customer_types);
             if flip(0.5) {
 		        location <- {left_sidewalk.x, rnd(left_sidewalk.y-10,left_sidewalk.y+10)};
 		        direction_left <- false;
