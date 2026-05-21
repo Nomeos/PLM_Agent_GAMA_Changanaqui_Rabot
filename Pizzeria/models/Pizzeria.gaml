@@ -1,6 +1,8 @@
 model Pizzeria
 
 import "Cook.gaml"
+import "Counter.gaml"
+import "Machine.gaml"
 import "Customer.gaml"
 import "Table.gaml"
 
@@ -27,6 +29,11 @@ global {
 	list<map> pending_orders <- [];
 	point takeaway_waiting_area <- {width / 2, 40};
 
+	/* Added */
+	list<geometry> work_stations <- []; 
+    list<geometry> counter_stations <- [];
+	int min_work_duration <- 10;
+	
 	init {
 		create Table number: 8 {
 	
@@ -47,11 +54,20 @@ global {
 			}
 
 		}
+		
+		create Machine number: 4 {
+			location <- any_location_in(kitchen);
+		}
+		
+		create Counter number: 2 {
+            location <- {width - 60, height - 45}; // Exemple : proche de l'entrée/kitchen
+        }
 
 		create Cook number: 2 {
 			location <- {rnd(width), rnd(height - 50, height)};
 		}
 
+		counter_stations +<- (Counter collect each.shape);
 	}
 
 	reflex manage_queue when: every(5 #cycle) {
