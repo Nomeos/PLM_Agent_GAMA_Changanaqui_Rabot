@@ -41,7 +41,7 @@ global {
     int max_task_time    <- 20;
     int order_wait_time  <- 15;
 
-    // ── Menu (prix → tasks/unité = round(prix/5)) ──────────────────────────
+    // ── Menu (prix → tasks/unité = round(prix/10)) ─────────────────────────
     map<string, int> menu <- [
         "pizza_margherita" :: 15,
         "pizza_pepperoni"  :: 18,

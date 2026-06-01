@@ -8,7 +8,7 @@ model Customer
 
 import "Pizzeria.gaml"
 
-species Customer skills: [moving, simple_bdi] {
+species Customer skills: [moving] {
 
     /****************************************
      *           CUSTOMER DATA
@@ -110,7 +110,7 @@ species Customer skills: [moving, simple_bdi] {
 
     // Customer walks toward the entrance
     reflex move_to_door
-    when: state = "going_to_door" and every(3#cycle) {
+    when: state = "going_to_door" {
 
         if target != nil {
 
@@ -126,7 +126,7 @@ species Customer skills: [moving, simple_bdi] {
 
     // Customer waits a bit before making a decision
     reflex wait_at_door
-    when: state = "arrived_at_door" and every(2#cycle) {
+    when: state = "arrived_at_door" {
 
         decision_timer <- decision_timer + 1.0;
 
@@ -159,7 +159,7 @@ species Customer skills: [moving, simple_bdi] {
 
     // Move inside the restaurant
     reflex enter
-    when: state = "entering" and every(3#cycle) {
+    when: state = "entering" {
 
         do goto(speed: 2.0, target: target);
 
@@ -203,38 +203,28 @@ species Customer skills: [moving, simple_bdi] {
 
         do goto(speed: 1.0, target: target);
 
-        queue_wait_time <- queue_wait_time + 1;
-
-        // Patience épuisée → satisfaction baisse puis part
-        float counter_tolerance <- patience * 0.8;
-
-		if queue_wait_time > counter_tolerance {
-		
-		    do change_satisfaction(
-		        -(1.0 * annoyance_factor)
-		    );
-		}
-
-        if satisfaction <= 0 {
-            state <- "leaving";
-            return;
-        }
-
-        // Réévaluer si un comptoir s'est libéré
-        list<Counter> free_counters <- counter_stations where (each.is_occupied = false);
-
+        // Try to grab a counter
+        list<Counter> free_counters <- counter_stations where (!each.is_occupied);
         if length(free_counters) > 0 {
-
-            assigned_counter <- free_counters[0];
+            assigned_counter <- one_of(free_counters);
             assigned_counter.is_occupied <- true;
             target <- assigned_counter.location;
             state <- "going_to_counter";
         }
     }
 
+    reflex check_patience when: (state = "ordering" or state = "waiting_for_counter" or state = "waiting_food") {
+        queue_wait_time <- queue_wait_time + 1;
+        if (queue_wait_time > effective_food_wait) {
+            if (assigned_counter != nil) { assigned_counter.is_occupied <- false; assigned_counter <- nil; }
+            if (assigned_table != nil) { assigned_table.occupied_seats <- assigned_table.occupied_seats - 1; assigned_table <- nil; }
+            state <- "leaving";
+        }
+    }
+
     // Se déplacer vers le comptoir
     reflex go_to_counter
-    when: state = "going_to_counter" and every(2#cycle) {
+    when: state = "going_to_counter" {
 
         do goto(speed: 2.0, target: target);
 
@@ -253,7 +243,9 @@ species Customer skills: [moving, simple_bdi] {
     // Decide if customer eats inside or takeaway
     reflex choose_eat_mode
     when: state = "choose_mode" {
-
+        // Safe release of counter
+        if (assigned_counter != nil) { assigned_counter.is_occupied <- false; assigned_counter <- nil; }
+        
         // Hungry customers are more likely to stay
         float dine_prob <- hunger / 100;
 
@@ -266,23 +258,28 @@ species Customer skills: [moving, simple_bdi] {
 			Table free_table <- one_of(candidates);
 	
 
-            // Table found
-            if free_table != nil {
-            	
-                assigned_table <- free_table;
-
-	            ask free_table {
-	           		do reserve_seat;
-	            }
+			// Table found
+			if free_table != nil {
+				assigned_table <- free_table;
 				
-				seat_position <- assigned_table.location +
-				    assigned_table.seat_positions[
-				        assigned_table.occupied_seats - 1
-				    ];
+				// Capture the current count as the index BEFORE incrementing.
+				// If 0 seats are occupied, we want index 0. This avoids the "-1" crash.
+				int seat_idx <- assigned_table.occupied_seats;
 
-                state <- "going_to_table";
-
-            } else {
+				ask assigned_table {
+					do reserve_seat;
+				}
+				
+				// Defensive check: ensure the index is valid for the table's seat list
+				if (seat_idx >= 0 and seat_idx < length(assigned_table.seat_positions)) {
+					seat_position <- assigned_table.location + assigned_table.seat_positions[seat_idx];
+					state <- "going_to_table";
+				} else {
+					// Safety fallback: if the table reports a seat but the list is empty/full
+					takeaway <- true;
+					state <- "waiting_food";
+				}
+			} else {
 
                 // No table available -> forced takeaway
                 takeaway <- true;
@@ -371,7 +368,7 @@ species Customer skills: [moving, simple_bdi] {
     }
     
     reflex pickup_takeaway
-    when: state = "picking_up_takeaway" and every(2#cycle) {
+    when: state = "picking_up_takeaway" {
 
         do goto(speed: 2.0, target: target);
 
@@ -415,7 +412,7 @@ species Customer skills: [moving, simple_bdi] {
      ****************************************/
 
     reflex leave
-    when: state = "leaving" and every(3#cycle) {
+    when: state = "leaving" {
 
         // --- Customer exits building first ---
         if is_in {

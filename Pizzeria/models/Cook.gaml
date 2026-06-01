@@ -19,6 +19,7 @@ species Cook skills: [moving] {
 
     string  state          <- "idle";
     Counter target_counter <- nil;
+    Counter last_counter   <- nil;
     Machine target_machine <- nil;
     Customer my_customer   <- nil;
 
@@ -38,7 +39,7 @@ species Cook skills: [moving] {
     int compute_tasks_total (map<string, int> order) {
         int total <- 0;
         loop item over: order.keys {
-            total <- total + round(menu[item] / 5.0) * order[item];
+            total <- total + max([1, round(menu[item] / 10.0)]) * order[item];
         }
         return total;
     }
@@ -75,7 +76,7 @@ species Cook skills: [moving] {
         list<Counter> busy_counters <- counter_stations where (!empty(Customer at_distance 2.0 overlapping each));
         list<Counter> cook_free_counters <- counter_stations where (empty(Cook at_distance 2.0 overlapping each));
         
-        list<Counter> candidates <- busy_counters inter cook_free_counters;
+        list<Counter> candidates <- (busy_counters inter cook_free_counters) - last_counter;
         
         if empty(candidates) { candidates <- cook_free_counters; }
         if empty(candidates) { candidates <- counter_stations; }
@@ -86,13 +87,6 @@ species Cook skills: [moving] {
 
     reflex move_to_counter when: state = "going_to_counter" {
         if target_counter = nil { state <- "idle"; return; }
-
-        // If another cook took the spot while we were moving, find a different one
-        list<Cook> other_cooks <- (Cook - self) at_distance 2.0;
-        if !empty(other_cooks overlapping target_counter) {
-            target_counter <- one_of(counter_stations where (empty(Cook at_distance 2.0 overlapping each)));
-            write "Cook " + self + " redirected to free counter " + target_counter;
-        }
 
         point wait_spot <- target_counter.location + {2.0, 2.0};
         do goto(speed: cook_speed, target: wait_spot);
@@ -115,8 +109,10 @@ species Cook skills: [moving] {
             int temp_tasks <- compute_tasks_total(temp_order);
 
             if personality = "quitter" and temp_tasks > abandon_threshold {
-                write "Cook " + self + " [quitter] gives up on huge order (" + temp_tasks + " tasks).";
-                target_counter <- nil; // Look for a new counter/customer
+                write "Cook " + self + " [quitter] rejects order from " + target_cust;
+                // Reset customer state so they can be picked up by another cook or re-order
+                ask target_cust { state <- "seeking_counter"; assigned_counter.is_occupied <- false; assigned_counter <- nil; }
+                target_counter <- nil;
                 state          <- "idle";
                 return;
             }
@@ -130,11 +126,6 @@ species Cook skills: [moving] {
 
             ask my_customer {
                 state <- "choose_mode";
-                // Counter is freed by the customer once they move to find a table/wait
-                if assigned_counter != nil {
-                    assigned_counter.is_occupied <- false;
-                    assigned_counter <- nil;
-                }
             }
 
             write "Cook " + self + " taking order from " + my_customer + ": " + tasks_total + " tasks total.";
@@ -203,6 +194,7 @@ species Cook skills: [moving] {
             }
 
             // Reset cook and customer reference
+            last_counter   <- target_counter;
             target_counter <- nil;
             my_customer    <- nil;
             current_order  <- map([]);
@@ -223,8 +215,7 @@ species Cook skills: [moving] {
         else if state = "choosing_machine" { cook_color <- #yellow; }
         
         rgb border_color <- #white;
-        if personality = "lazy" { border_color <- #grey; }
-        else if personality = "explorer" { border_color <- #purple; }
+        if personality = "explorer" { border_color <- #purple; }
         else if personality = "quitter" { border_color <- #red; }
 
         draw circle(3.0) color: cook_color border: border_color;
