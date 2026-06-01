@@ -18,6 +18,7 @@ species Customer skills: [moving, simple_bdi] {
     string customer_type;
     int max_food_wait;
 	float annoyance_factor;
+	float effective_food_wait;
 
     // --- Movement / Position ---
     point target;
@@ -30,10 +31,7 @@ species Customer skills: [moving, simple_bdi] {
     int hunger;
 
     // --- Timers ---
-    float waiting_time <- 0.0;
     float decision_timer <- 0.0;
-    float menu_time <- 0.0;
-    float food_waiting_time <- 0.0;
     float waiting_for_food_time <- 0.0;
 	float eating_time <- 0.0;
 	float queue_wait_time <- 0.0;
@@ -51,9 +49,6 @@ species Customer skills: [moving, simple_bdi] {
     
     // --- Counter Management ---
     Counter assigned_counter <- nil;
-
-    // --- Visual ---
-    float radius <- 2.0;
 
     /****************************************
      *              INIT
@@ -105,6 +100,8 @@ species Customer skills: [moving, simple_bdi] {
                 hunger <- rnd(80,100);
             }
         }
+        // La patience modifie réellement le temps acceptable d'attente
+		effective_food_wait <- max_food_wait * (patience / 100.0);
 	}
 
     /****************************************
@@ -147,7 +144,7 @@ species Customer skills: [moving, simple_bdi] {
     when: state = "deciding" {
 
         // 60% chance to enter if queue is not too large
-        if flip(0.6) and length(waiting_queue) < 8 {
+        if flip(hunger) and length(waiting_queue) < 8 {
 
             state <- "entering";
             target <- inside_point;
@@ -168,7 +165,6 @@ species Customer skills: [moving, simple_bdi] {
 
         is_in <- true;
 
-        // Once inside, read the menu
         if distance_to(location, target) < 2.0 {
             state <- "seeking_counter";
         }
@@ -210,9 +206,14 @@ species Customer skills: [moving, simple_bdi] {
         queue_wait_time <- queue_wait_time + 1;
 
         // Patience épuisée → satisfaction baisse puis part
-        if queue_wait_time > patience * 0.4 {
-            do change_satisfaction(-(1.0 * annoyance_factor));
-        }
+        float counter_tolerance <- patience * 0.8;
+
+		if queue_wait_time > counter_tolerance {
+		
+		    do change_satisfaction(
+		        -(1.0 * annoyance_factor)
+		    );
+		}
 
         if satisfaction <= 0 {
             state <- "leaving";
@@ -332,21 +333,26 @@ species Customer skills: [moving, simple_bdi] {
 	
 	    waiting_for_food_time <- waiting_for_food_time + 1;
 
-        if waiting_for_food_time > (max_food_wait * 0.5) {
-            do change_satisfaction(-(0.2 * annoyance_factor));
-        }
+        if waiting_for_food_time > (effective_food_wait * 0.5) {
 
-        if waiting_for_food_time > max_food_wait {
-
-            do change_satisfaction(-25 * annoyance_factor);
-
-            if assigned_table != nil {
-                assigned_table.occupied_seats <- assigned_table.occupied_seats - 1;
-                assigned_table <- nil;
-            }
-
-            state <- "leaving";
-        }
+		    do change_satisfaction(
+		        -(0.2 * annoyance_factor)
+		    );
+		}
+		
+		if waiting_for_food_time > effective_food_wait {
+		
+		    do change_satisfaction(
+		        -(25 * annoyance_factor)
+		    );
+		
+		    if assigned_table != nil {
+		        assigned_table.occupied_seats <- assigned_table.occupied_seats - 1;
+		        assigned_table <- nil;
+		    }
+		
+		    state <- "leaving";
+		}
 	}
 	
 	action receive_food {
@@ -459,7 +465,7 @@ species Customer skills: [moving, simple_bdi] {
 
 	    satisfaction <- satisfaction + amount;
 	
-	    if satisfaction > 100 {
+	    if satisfaction > 150 {
 	        satisfaction <- 100;
 	    }
 	
@@ -497,6 +503,6 @@ aspect base {
             }
         }
 
-        draw circle(radius) color: col border: #white;
+        draw circle(2.0) color: col border: #white;
     }
 }
