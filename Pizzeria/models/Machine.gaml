@@ -8,14 +8,25 @@
 
 model Machine
 
-/* Insert your model definition here */
+import "Pizzeria.gaml"
 
 species Machine {
-    float cost <- 100.0;
-    string state <- "idle";
-    float failure_chance <- 0.01;
+    geometry shape <- rectangle(8, 8);
+    bool is_occupied <- false;
+    Cook current_cook <- nil;
+    //int work_start_time <- 0;
+
+    init {
+    	//location <- any_location_in(kitchen);
+        //work_stations +<- shape;
+    }
 
     aspect base {
-        draw square(4) color: (state = "broken") ? #red : #gray border: #darkgray;
+        draw shape color: #green border: #black;
+        if is_occupied {
+            draw shape at: {location.x, location.y} font: font("Arial", 8, #plain) color: #darkred border: #black;
+        } else {
+            draw shape at: {location.x, location.y} font: font("Arial", 8, #plain) color: #green border: #black;
+        }
     }
 }
