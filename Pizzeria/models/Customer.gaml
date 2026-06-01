@@ -34,7 +34,8 @@ species Customer skills: [moving, simple_bdi] {
     float decision_timer <- 0.0;
     float menu_time <- 0.0;
     float food_waiting_time <- 0.0;
-    float eating_time <- 0.0;
+    float waiting_for_food_time <- 0.0;
+	float eating_time <- 0.0;
 
     // --- State Machine ---
     string state;
@@ -244,18 +245,18 @@ species Customer skills: [moving, simple_bdi] {
         // --- DINE IN ---
         if not takeaway {
 
-            // Search for a free table
-            Table free_table <- one_of(
-			    Table where (each.has_free_seat())
-			);
+			list<Table> candidates <- Table where (each.has_free_seat());
+			Table free_table <- one_of(candidates);
+	
 
             // Table found
             if free_table != nil {
-
+            	
                 assigned_table <- free_table;
 
-                // Reserve one seat
-                assigned_table.occupied_seats <- assigned_table.occupied_seats + 1;
+	            ask free_table {
+	           		do reserve_seat;
+	            }
 				
 				seat_position <- assigned_table.location +
 				    assigned_table.seat_positions[
@@ -271,7 +272,7 @@ species Customer skills: [moving, simple_bdi] {
 
                 // Customer is disappointed
                 do change_satisfaction(
-                	-(10 * annoyance_factor)
+                	-(1 * annoyance_factor)
                 );
 
                 state <- "waiting_food";
@@ -313,25 +314,23 @@ species Customer skills: [moving, simple_bdi] {
     reflex wait_food
 	when: state = "seated" or state = "waiting_food" and every(1#cycle) {
 	
-	    food_waiting_time <- food_waiting_time + 1;
-	
-	    // Perte progressive après un certain temps
-	    if food_waiting_time > (max_food_wait * 0.5) {
-	
-	        do change_satisfaction(
-	            -(0.2 * annoyance_factor)
-	        );
+	    if state = "seated" {
+	        waiting_for_food_time <- waiting_for_food_time + 1;
 	    }
 	
-	    // Trop attendu -> rage quit
-	    if food_waiting_time > max_food_wait {
+	    if state = "waiting_food" {
+	        waiting_for_food_time <- waiting_for_food_time + 1;
+	    }
 	
+	    if waiting_for_food_time > (max_food_wait * 0.5) {
+	        do change_satisfaction(-(0.2 * annoyance_factor));
+	    }
+	
+	    if waiting_for_food_time > max_food_wait {
 	        do change_satisfaction(-25 * annoyance_factor);
-	        
-	        if state = "seated" {
-	        	if assigned_table != nil {
-            		assigned_table.occupied_seats <- assigned_table.occupied_seats - 1;
-            	}
+	
+	        if state = "seated" and assigned_table != nil {
+	            assigned_table.occupied_seats <- assigned_table.occupied_seats - 1;
 	        }
 	
 	        state <- "leaving";
@@ -345,7 +344,7 @@ species Customer skills: [moving, simple_bdi] {
     // Customer eats at the table
     reflex eat
     when: state = "eating" and every(1#cycle) {
-
+		waiting_for_food_time <- 0.0;
         eating_time <- eating_time + 1;
 
         // Finished eating

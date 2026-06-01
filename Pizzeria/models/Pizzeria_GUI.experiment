@@ -16,6 +16,7 @@ experiment "Pizzeria_GUI"  type:gui {
 	/** Parameters can be used to input values to the model **/
 	// parameter "First parameter" var: an_attribute_of_the_model <- an_expression;
 	parameter "Number of customers" var: nb_customers min: 1 max: 50 init: 10;
+	parameter "Number of tables" var: nb_tables min: 1 max: 20 init: 5;
 	
 	output {
     	/** monitors can be used to output values, either in the UI or in a file **/

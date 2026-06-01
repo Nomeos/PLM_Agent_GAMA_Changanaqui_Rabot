@@ -8,6 +8,7 @@ global {
 	int width <- 200;
 	int height <- 200;
 	int nb_customers <- 10;
+	int nb_tables <- 5;
 	geometry shape <- rectangle(width, height);
 	geometry kitchen <- rectangle(width, 90) at_location {width / 2, height - 40};
 	geometry entrance <- rectangle(40, 10) at_location {width - 50, 25};
@@ -28,11 +29,9 @@ global {
 	point takeaway_waiting_area <- {width / 2, 40};
 
 	init {
-		create Table number: 8 {
+		create Table number: nb_tables {
 	
 		    location <- any_location_in(dining_area);
-		
-		    max_capacity <- rnd(1,4);
 		
 		    occupied_seats <- 0;
 		 }
@@ -75,6 +74,43 @@ global {
 
 		}
 
+	}
+	
+	reflex update_table_count {
+
+	    // ========= AJOUT =========
+	    if length(Table) < nb_tables {
+	
+	        int missing <- nb_tables - length(Table);
+	
+	        create Table number: missing {
+	
+	            location <- any_location_in(dining_area);
+	
+	            max_capacity <- rnd(1,4);
+	
+	            occupied_seats <- 0;
+	        }
+	    }
+	
+	    // ========= SUPPRESSION =========
+	    if length(Table) > nb_tables {
+	
+	        int extra <- length(Table) - nb_tables;
+	
+	        // supprime uniquement tables vides
+	        list<Table> removable <- (
+	            Table where (each.occupied_seats = 0)
+	        );
+	
+			loop toremove over: removable {
+
+		        ask toremove {
+		        	do die;
+		        }
+		    }
+	 
+	    }
 	}
 
 }
