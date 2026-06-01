@@ -34,7 +34,9 @@ species Customer skills: [moving, simple_bdi] {
     float decision_timer <- 0.0;
     float menu_time <- 0.0;
     float food_waiting_time <- 0.0;
-    float eating_time <- 0.0;
+    float waiting_for_food_time <- 0.0;
+	float eating_time <- 0.0;
+	float queue_wait_time <- 0.0;
 
     // --- State Machine ---
     string state;
@@ -46,6 +48,9 @@ species Customer skills: [moving, simple_bdi] {
     // --- Table Management ---
     Table assigned_table <- nil;
     point seat_position <- nil;
+    
+    // --- Counter Management ---
+    Counter assigned_counter <- nil;
 
     // --- Visual ---
     float radius <- 2.0;
@@ -67,57 +72,39 @@ species Customer skills: [moving, simple_bdi] {
 	    ]);
 	
 	    switch customer_type {
-	
-	        // CLIENT NORMAL
-	        match "regular" {
-	
-	            patience <- rnd(80,120);
-	
-	            max_food_wait <- rnd(60,90);
-	
-	            annoyance_factor <- 1.0;
-	
-	            hunger <- rnd(40,90);
-	        }
-	
-	        // CLIENT VIP
-	        match "vip" {
-	
-	            patience <- rnd(120,180);
-	
-	            max_food_wait <- rnd(90,140);
-	
-	            annoyance_factor <- 1.5;
-	
-	            satisfaction <- 120;
-	
-	            hunger <- rnd(50,100);
-	        }
-	
-	        // CLIENT IMPATIENT
-	        match "impatient" {
-	
-	            patience <- rnd(40,70);
-	
-	            max_food_wait <- rnd(25,45);
-	
-	            annoyance_factor <- 2.5;
-	
-	            hunger <- rnd(70,100);
-	        }
-	
-	        // FOODIE
-	        match "foodie" {
-	
-	            patience <- rnd(100,160);
-	
-	            max_food_wait <- rnd(70,120);
-	
-	            annoyance_factor <- 2.0;
-	
-	            hunger <- rnd(80,100);
-	        }
-	    }
+
+            match "regular" {
+                patience <- rnd(80,120);
+                max_food_wait <- rnd(60,90);
+                annoyance_factor <- 1.0;
+                hunger <- rnd(40,90);
+                satisfaction <- 80;
+            }
+
+            match "vip" {
+                patience <- rnd(120,180);
+                max_food_wait <- rnd(90,140);
+                annoyance_factor <- 1.5;
+                satisfaction <- 120;
+                hunger <- rnd(50,100);
+            }
+
+            match "impatient" {
+                patience <- rnd(40,70);
+                max_food_wait <- rnd(25,45);
+                annoyance_factor <- 2.5;
+                satisfaction <- 70;
+                hunger <- rnd(70,100);
+            }
+
+            match "foodie" {
+                patience <- rnd(100,160);
+                max_food_wait <- rnd(70,120);
+                annoyance_factor <- 2.0;
+                satisfaction <- 90;
+                hunger <- rnd(80,100);
+            }
+        }
 	}
 
     /****************************************
@@ -183,50 +170,80 @@ species Customer skills: [moving, simple_bdi] {
 
         // Once inside, read the menu
         if distance_to(location, target) < 2.0 {
-            state <- "reading_menu";
+            state <- "seeking_counter";
+        }
+    }
+    
+        /****************************************
+     *        COUNTER — ORDERING
+     ****************************************/
+
+    // Cherche un comptoir libre ou attend
+    reflex seek_counter
+    when: state = "seeking_counter" {
+
+        list<Counter> free_counters <- counter_stations where (each.is_occupied = false);
+
+        if length(free_counters) > 0 {
+
+            // Prend le premier comptoir libre
+            assigned_counter <- free_counters[0];
+            assigned_counter.is_occupied <- true;
+            target <- assigned_counter.location;
+            state <- "going_to_counter";
+
+        } else {
+
+            // Aucun comptoir libre : attendre au point d'attente
+            state <- "waiting_for_counter";
+            target <- any_location_in(waiting_area);
+            queue_wait_time <- 0.0;
         }
     }
 
-    /****************************************
-     *            MENU READING
-     ****************************************/
+    // Attendre qu'un comptoir se libère
+    reflex wait_for_counter
+    when: state = "waiting_for_counter" and every(1#cycle) {
 
-    // Customer takes time to choose a meal
-    reflex read_menu
-    when: state = "reading_menu" and every(1#cycle) {
+        do goto(speed: 1.0, target: target);
 
-        menu_time <- menu_time + 1;
+        queue_wait_time <- queue_wait_time + 1;
 
-        // Random reading duration
-        if menu_time > rnd(5,15) {
+        // Patience épuisée → satisfaction baisse puis part
+        if queue_wait_time > patience * 0.4 {
+            do change_satisfaction(-(1.0 * annoyance_factor));
+        }
 
-            // Get all meals from menu
-            list<string> meals <- menu.keys;
+        if satisfaction <= 0 {
+            state <- "leaving";
+            return;
+        }
 
-            // Random meal selection
-            chosen_meal <- one_of(meals);
+        // Réévaluer si un comptoir s'est libéré
+        list<Counter> free_counters <- counter_stations where (each.is_occupied = false);
 
+        if length(free_counters) > 0 {
+
+            assigned_counter <- free_counters[0];
+            assigned_counter.is_occupied <- true;
+            target <- assigned_counter.location;
+            state <- "going_to_counter";
+        }
+    }
+
+    // Se déplacer vers le comptoir
+    reflex go_to_counter
+    when: state = "going_to_counter" and every(2#cycle) {
+
+        do goto(speed: 2.0, target: target);
+
+        if distance_to(location, target) < 2.0 {
             state <- "ordering";
         }
     }
 
-    /****************************************
-     *             ORDERING
-     ****************************************/
-
-    // Add customer order to global pending order list
-    reflex order_food
-    when: state = "ordering" {
-
-        //pending_orders <- pending_orders + [[
-        //    "customer"::self,
-        //    "meal"::chosen_meal,
-        //    "prep_time"::menu[chosen_meal],
-        //    "progress"::0
-        //]];
-
-        state <- "choose_mode";
-    }
+    // The ordering process is now handled by the Cook via an 'ask' block.
+    // The customer stays in 'ordering' state (passive wait) until the Cook picks them up.
 
     /****************************************
      *       DINE-IN OR TAKEAWAY
@@ -244,18 +261,18 @@ species Customer skills: [moving, simple_bdi] {
         // --- DINE IN ---
         if not takeaway {
 
-            // Search for a free table
-            Table free_table <- one_of(
-			    Table where (each.has_free_seat())
-			);
+			list<Table> candidates <- Table where (each.has_free_seat());
+			Table free_table <- one_of(candidates);
+	
 
             // Table found
             if free_table != nil {
-
+            	
                 assigned_table <- free_table;
 
-                // Reserve one seat
-                assigned_table.occupied_seats <- assigned_table.occupied_seats + 1;
+	            ask free_table {
+	           		do reserve_seat;
+	            }
 				
 				seat_position <- assigned_table.location +
 				    assigned_table.seat_positions[
@@ -271,7 +288,7 @@ species Customer skills: [moving, simple_bdi] {
 
                 // Customer is disappointed
                 do change_satisfaction(
-                	-(10 * annoyance_factor)
+                	-(1 * annoyance_factor)
                 );
 
                 state <- "waiting_food";
@@ -306,37 +323,66 @@ species Customer skills: [moving, simple_bdi] {
     reflex move_takeaway_area
     when: state = "waiting_food" and takeaway {
 
-        do goto target: takeaway_waiting_area speed: 2.0;
+        do goto target: any_location_in(waiting_area) speed: 2.0;
     }
 
     // Waiting logic
     reflex wait_food
-	when: state = "seated" or state = "waiting_food" and every(1#cycle) {
+	when: (state = "seated" or state = "waiting_food") and every(20#cycle) {
 	
-	    food_waiting_time <- food_waiting_time + 1;
-	
-	    // Perte progressive après un certain temps
-	    if food_waiting_time > (max_food_wait * 0.5) {
-	
-	        do change_satisfaction(
-	            -(0.2 * annoyance_factor)
-	        );
-	    }
-	
-	    // Trop attendu -> rage quit
-	    if food_waiting_time > max_food_wait {
-	
-	        do change_satisfaction(-25 * annoyance_factor);
-	        
-	        if state = "seated" {
-	        	if assigned_table != nil {
-            		assigned_table.occupied_seats <- assigned_table.occupied_seats - 1;
-            	}
-	        }
-	
-	        state <- "leaving";
-	    }
+	    waiting_for_food_time <- waiting_for_food_time + 1;
+
+        if waiting_for_food_time > (max_food_wait * 0.5) {
+            do change_satisfaction(-(0.2 * annoyance_factor));
+        }
+
+        if waiting_for_food_time > max_food_wait {
+
+            do change_satisfaction(-25 * annoyance_factor);
+
+            if assigned_table != nil {
+                assigned_table.occupied_seats <- assigned_table.occupied_seats - 1;
+                assigned_table <- nil;
+            }
+
+            state <- "leaving";
+        }
 	}
+	
+	action receive_food {
+        waiting_for_food_time <- 0.0;
+        if not takeaway {
+            state <- "eating";
+        } else {
+            // Takeaway: Go to the counter where the cook who served us is waiting
+            // 'myself' refers to the Cook who called this action
+            if (self != nil and self is Cook) {
+                assigned_counter <- Cook(self).target_counter;
+                target <- assigned_counter.location;
+                state <- "picking_up_takeaway";
+            } else {
+                state <- "leaving";
+            }
+        }
+    }
+    
+    reflex pickup_takeaway
+    when: state = "picking_up_takeaway" and every(2#cycle) {
+
+        do goto(speed: 2.0, target: target);
+
+        if distance_to(location, target) < 2.0 {
+
+            // Récupéré → libérer le comptoir et partir
+            if assigned_counter != nil {
+                assigned_counter.is_occupied <- false;
+                assigned_counter <- nil;
+            }
+
+            do change_satisfaction(10);
+            state <- "leaving";
+        }
+    }
 
     /****************************************
      *               EATING
@@ -348,14 +394,14 @@ species Customer skills: [moving, simple_bdi] {
 
         eating_time <- eating_time + 1;
 
-        // Finished eating
         if eating_time > rnd(15,30) {
 
-            // Free table seat
             if assigned_table != nil {
-            	assigned_table.occupied_seats <- assigned_table.occupied_seats - 1;
+                assigned_table.occupied_seats <- assigned_table.occupied_seats - 1;
+                assigned_table <- nil;
             }
 
+            do change_satisfaction(20);
             state <- "leaving";
         }
     }
@@ -426,55 +472,31 @@ species Customer skills: [moving, simple_bdi] {
      *             VISUALS
      ****************************************/
 
-    aspect base {
-	
-	    rgb col <- #gray;
-	
-	    // ========= TYPE =========
-	
-	    switch customer_type {
-	
-	        match "regular" {
-	            col <- #dodgerblue;
-	        }
-	
-	        match "vip" {
-	            col <- #gold;
-	        }
-	
-	        match "impatient" {
-	            col <- #crimson;
-	        }
-	
-	        match "foodie" {
-	            col <- #mediumorchid;
-	        }
-	    }
-	
-	    // ========= ETAT =========
-	
-	    if state = "reading_menu" {
-	        col <- darker(col);
-	    }
-	
-	    if state = "waiting_food" {
-	        col <- #orange;
-	    }
-	
-	    if state = "eating" {
-	        col <- #limegreen;
-	    }
-	
-	    if state = "leaving" {
-	
-	        // rouge/noir si vraiment énervé
-	        if satisfaction < 30 {
-	            col <- #black;
-	        } else {
-	            col <- #darkred;
-	        }
-	    }
-	
-	    draw circle(radius) color: col border: #white;
-	}
+aspect base {
+
+        rgb col <- #gray;
+
+        switch customer_type {
+            match "regular"  { col <- #dodgerblue; }
+            match "vip"      { col <- #gold; }
+            match "impatient"{ col <- #crimson; }
+            match "foodie"   { col <- #mediumorchid; }
+        }
+
+        if state = "waiting_for_counter" { col <- #lightyellow; }
+        if state = "ordering"            { col <- darker(col); }
+        if state = "waiting_food"        { col <- #orange; }
+        if state = "eating"              { col <- #limegreen; }
+        if state = "picking_up_takeaway" { col <- #yellowgreen; }
+
+        if state = "leaving" {
+            if satisfaction < 30 {
+                col <- #black;
+            } else {
+                col <- #darkred;
+            }
+        }
+
+        draw circle(radius) color: col border: #white;
+    }
 }

@@ -14,6 +14,7 @@ import "Counter.gaml"
 experiment "Pizzeria_GUI"  type:gui {
 	
 	parameter "Nb customers"          var: nb_customers   min: 1  max: 50  init: 10  category: "Customers";
+	parameter "Number of tables" var: nb_tables min: 1 max: 20 init: 5 category: "Customers";
     parameter "Spawn rate (cycles)"   var: spawn_every    min: 1  max: 20  init: 5   category: "Customers";
     parameter "Queue capacity"        var: queue_capacity min: 1  max: 20  init: 8   category: "Customers";
 
@@ -48,17 +49,8 @@ experiment "Pizzeria_GUI"  type:gui {
                 draw dining_area color: #orange;
                 // Entrance
                 draw entrance color: #green;
-            }
-            
-            graphics "metrics" {
-                draw rectangle(70, 28) at: {35, 14}
-                    color: rgb(0, 0, 0, 140) border: #white;
-                draw "CA : " + restaurant_ca + " €"
-                    at: {5, 7}  font: font("Arial", 8, #bold) color: #white;
-                draw "Commandes livrées : " + served_customers
-                    at: {5, 14} font: font("Arial", 8, #bold) color: #white;
-                draw "Cooks actifs : " + length(Cook where (each.state != "idle")) + "/" + length(Cook)
-                    at: {5, 21} font: font("Arial", 8, #bold) color: #white;
+                
+                draw waiting_area color: #purple;
             }
 
             species Table aspect: base;
