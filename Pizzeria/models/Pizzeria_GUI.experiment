@@ -36,6 +36,8 @@ experiment "Pizzeria_GUI"  type:gui {
                 draw dining_area color: #orange;
                 // Entrance
                 draw entrance color: #green;
+                
+                draw waiting_area color: #purple;
             }
 
             species Table aspect: base;

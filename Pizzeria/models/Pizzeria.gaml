@@ -16,6 +16,8 @@ global {
 	geometry entrance <- rectangle(40, 10) at_location {width - 50, 25};
 	geometry sidewalk <- rectangle(width, 50) at_location {width / 2, 0};
 	geometry dining_area <- rectangle(110, 80) at_location {70, 70};
+	geometry waiting_area <- rectangle(20, 60) at_location {185, 70};
+	
 	
 	point door_location <- {entrance.location.x, entrance.location.y - 10};
 	point inside_point <- {entrance.location.x, entrance.location.y + 40};
