@@ -25,15 +25,15 @@ global {
 	int spawn_every <- 5;
 	float restaurant_rating <- 100.0;
 	int served_customers <- 0;
-	map<string, int> menu <- ["pizza_margherita"::15, "pizza_pepperoni"::18, "salad"::10, "drink"::5, "menu_deluxe"::25];
-	list<map> pending_orders <- [];
 	point takeaway_waiting_area <- {width / 2, 40};
 
-	/* Added */
-	list<geometry> work_stations <- []; 
-    list<geometry> counter_stations <- [];
-	int min_work_duration <- 10;
-	
+	list<Machine> work_stations <- []; 
+    list<Counter> counter_stations <- [];
+    int static_counter_id <- 0;
+    map<string, int> menu <- ["pizza_margherita"::15, "pizza_pepperoni"::18, "salad"::10, "drink"::5];
+    list<map> pending_orders <- [];
+    int min_work_duration <- 5;
+    	
 	init {
 		create Table number: 8 {
 	
@@ -59,15 +59,16 @@ global {
 			location <- any_location_in(kitchen);
 		}
 		
-		create Counter number: 2 {
-            location <- {width - 60, height - 45}; // Exemple : proche de l'entrée/kitchen
-        }
+		create Counter number: 4 {
+        	//location <- {width - 40 + (static_counter_id * 5.0), dining_area.location.y + 45};
+    	}
 
 		create Cook number: 2 {
 			location <- {rnd(width), rnd(height - 50, height)};
 		}
 
-		counter_stations +<- (Counter collect each.shape);
+		work_stations <- Machine;
+		counter_stations <- Counter;
 	}
 
 	reflex manage_queue when: every(5 #cycle) {

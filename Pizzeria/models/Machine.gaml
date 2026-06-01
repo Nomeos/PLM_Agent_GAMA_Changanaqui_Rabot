@@ -11,26 +11,22 @@ model Machine
 import "Pizzeria.gaml"
 
 species Machine {
-    int capacity <- 1;
+    geometry shape <- rectangle(8, 8);
     bool is_occupied <- false;
     Cook current_cook <- nil;
-    int work_start_time <- 0;
-    
-    // IMPORTANT : Définir une forme par défaut si elle n'est pas héritée ou définie ailleurs
-    geometry shape <- rectangle(5, 5); 
+    //int work_start_time <- 0;
 
     init {
-        // Syntaxe robuste pour ajouter à une liste globale
-        if (work_stations != nil) {
-            work_stations +<- shape;
-        }
+    	//location <- any_location_in(kitchen);
+        //work_stations +<- shape;
     }
 
     aspect base {
-        rgb occ_color <- is_occupied ? #darkgray : #gray;
-        draw shape color: occ_color border: #black;
+        draw shape color: #green border: #black;
         if is_occupied {
-            draw "Busy" font: font("Arial", 4, #plain) color: #white;
+            draw shape at: {location.x, location.y} font: font("Arial", 8, #plain) color: #darkred border: #black;
+        } else {
+            draw shape at: {location.x, location.y} font: font("Arial", 8, #plain) color: #green border: #black;
         }
     }
 }

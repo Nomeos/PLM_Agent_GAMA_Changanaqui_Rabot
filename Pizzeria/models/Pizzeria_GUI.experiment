@@ -9,6 +9,7 @@ model Pizzeria_GUI
 import "Pizzeria.gaml"
 import "Cook.gaml"
 import "Machine.gaml"
+import "Counter.gaml"
 
 experiment "Pizzeria_GUI"  type:gui {
 	/** Insert here the definition of the inputs and outputs of the model */
@@ -38,6 +39,7 @@ experiment "Pizzeria_GUI"  type:gui {
 
             species Table aspect: base;
             species Machine aspect: base;
+            species Counter aspect: base;
             species Cook aspect: base;
             species Customer aspect: base;
         }

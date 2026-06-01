@@ -13,90 +13,138 @@ import "Counter.gaml"
 import "Machine.gaml"
 
 species Cook skills: [moving] {
-    string state <- "looking_for_station"; 
-    geometry target_station <- nil;
-    int arrival_time <- 0; 
-    int work_duration <- 0; 
-    int wait_start_time <- 0;
-    int wait_duration <- 5; 
-
-    reflex choose_station when: state = "looking_for_station" {
-        // CORRECTION CRITIQUE : Filtrer les listes d'AGENTS, pas de géométries
-        list<Machine> free_machines_agents <- Machine where (each.is_occupied = false);
-        list<Counter> free_counters_agents <- Counter where (each.is_occupied = false);
-        
-        // Extraire les formes pour le mouvement
-        list<geometry> free_machines <- free_machines_agents collect each.shape;
-        list<geometry> free_counters <- free_counters_agents collect each.shape;
-        
-        list<geometry> all_free <- free_machines + free_counters;
-        
-        if length(all_free) > 0 {
-            target_station <- one_of(all_free);
-            state <- "moving_to_station";
+    string state <- "idle";
+    float speed <- 1.0;
+    
+    Counter target_counter <- nil;
+    Machine target_machine <- nil;    
+    map<string, int> current_order <- nil;
+    
+    list<Machine> machines_to_use <- [];
+    int current_machine_index <- 0;
+    int work_remaining <- 0;
+    
+    reflex seek_counter when: state = "idle" {
+        // Chercher un counter non occupé
+        list<Counter> free_counters <- counter_stations where (each.is_occupied = false);
+        if length(free_counters) > 0 {
+            target_counter <- free_counters[0];
+            target_counter.is_occupied <- true;
+            target_counter.current_cook <- self;
+            state <- "going_to_counter";
+            write "Cook " + self + " goes to counter " + target_counter;
         } else {
-            state <- "waiting";
-            wait_start_time <- time; 
+            // Aucun counter libre, on attend (ne rien faire)
         }
     }
-
-    reflex waiting_logic when: state = "waiting" {
-        if (time - wait_start_time) >= wait_duration {
-            state <- "looking_for_station";
+    
+    reflex move_to_counter when: state = "going_to_counter" {
+        if target_counter != nil {
+            do goto(speed: 2.0, target: target_counter);
+            if (self distance_to target_counter) < 1.0 {
+                state <- "taking_order";
+                write "Cook " + self + " arrived at counter " + target_counter;
+            }
+        } else {
+            state <- "idle";
         }
     }
-
-    reflex move_to_station when: state = "moving_to_station" {
-        if target_station != nil {
-            do goto(speed: 2.0, target: target_station);
+    
+    reflex take_order when: state = "taking_order" {
+        // Choisir un item au hasard dans le menu
+        string chosen_item <- one_of(menu); // menu[rnd(length(menu))];
+        current_order <- [chosen_item::menu[chosen_item]];
+        write "Cook " + self + " takes order: " + chosen_item;
+        
+        // Sélectionner 3 machines (ou toutes si moins de 3)
+        machines_to_use <- work_stations;
+        if length(machines_to_use) > 3 {
+            machines_to_use <- shuffle(machines_to_use);
+        }
+        current_machine_index <- 0;
+        
+        if length(machines_to_use) > 0 {
+            target_machine <- machines_to_use[0];
+            state <- "going_to_machine";
+            write "Cook " + self + " goes to machine " + target_machine;
+        } else {
+            // Pas de machine du tout (cas improbable)
+            write "No machines available!";
+            target_counter.is_occupied <- false;
+            target_counter.current_cook <- nil;
+            target_counter <- nil;
+            state <- "idle";
+        }
+    }
+    
+    reflex move_to_machine when: state = "going_to_machine" {
+        if target_machine != nil {
+            do goto(speed: 2.0, target: target_machine);
             
-            if (location distance_to target_station) < 0.3 { 
-                state <- "working";
-                arrival_time <- time;
-                work_duration <- rnd(5, 10);
-                
-                list<Machine> my_machine <- Machine where (shape = target_station);
-                list<Counter> my_counter <- Counter where (shape = target_station);
-                
-                if length(my_machine) > 0 {
-                    my_machine[0].is_occupied <- true;
-                    my_machine[0].current_cook <- self;
-                } else if length(my_counter) > 0 {
-                    my_counter[0].is_occupied <- true;
-                    my_counter[0].current_cook <- self;
+            if (self distance_to target_machine) < 0.1 {
+                if target_machine.is_occupied = false {
+                    // Prendre la machine
+                    target_machine.is_occupied <- true;
+                    target_machine.current_cook <- self;
+                    work_remaining <- rnd(5, 15);  // durée de travail aléatoire
+                    state <- "working";
+                    write "Cook " + self + " starts working on machine " + target_machine + " for " + work_remaining + " cycles";
+                } else {
+                    // Machine occupée, attendre (rester dans le même état)
+                    // On ne fait rien, le reflex sera réévalué au prochain cycle
                 }
             }
         } else {
-            state <- "looking_for_station";
+            state <- "idle";
         }
     }
-
-    reflex work_on_station when: state = "working" {
-        if (time - arrival_time) >= work_duration {
-            state <- "looking_for_station";
-            geometry current_work_place <- target_station;
-            target_station <- nil;
+    
+    reflex work when: state = "working" {
+        work_remaining <- work_remaining - 1;
+        if work_remaining <= 0 {
+            // Libérer la machine
+            target_machine.is_occupied <- false;
+            target_machine.current_cook <- nil;
+            write "Cook " + self + " finished on machine " + target_machine;
             
-            if current_work_place != nil {
-                list<Machine> my_machine <- Machine where (shape = current_work_place);
-                list<Counter> my_counter <- Counter where (shape = current_work_place);
-                
-                if length(my_machine) > 0 {
-                    my_machine[0].is_occupied <- false;
-                    my_machine[0].current_cook <- nil;
-                } else if length(my_counter) > 0 {
-                    my_counter[0].is_occupied <- false;
-                    my_counter[0].current_cook <- nil;
-                }
+            // Passer à la machine suivante
+            current_machine_index <- current_machine_index + 1;
+            if current_machine_index < length(machines_to_use) {
+                target_machine <- machines_to_use[current_machine_index];
+                state <- "going_to_machine";
+                write "Cook " + self + " goes to next machine " + target_machine;
+            } else {
+                // Toutes les machines utilisées → retourner au counter
+                state <- "going_back_to_counter";
+                write "Cook " + self + " completed all machines, returning to counter";
             }
         }
     }
-
+    
+    reflex go_back_to_counter when: state = "going_back_to_counter" {
+        if target_counter != nil {
+            do goto(speed: 2.0, target: target_counter);
+            if (self distance_to target_counter) < 1.0 {
+                // Livrer la commande (pour l'instant, juste terminer)
+                write "Cook " + self + " delivers order " + current_order + " at counter " + target_counter;
+                // Libérer le counter
+                target_counter.is_occupied <- false;
+                target_counter.current_cook <- nil;
+                target_counter <- nil;
+                current_order <- nil;
+                machines_to_use <- [];
+                state <- "idle";
+            }
+        } else {
+            state <- "idle";
+        }
+    }
+    
     aspect base {
-        rgb my_cook_color <- #firebrick;
+        rgb my_cook_color <- #cyan;
         if state = "working" { my_cook_color <- #green; }
         if state = "moving_to_station" { my_cook_color <- #orange; }
-        if state = "waiting" { my_cook_color <- #blue; }
+        if state = "waiting" { my_cook_color <- #cyan; }
         
         draw circle(2.5) color: my_cook_color border: #white;
         draw state font: font("Arial", 6, #plain) at: {location.x, location.y - 4} color: #black;
