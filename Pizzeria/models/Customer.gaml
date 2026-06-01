@@ -218,12 +218,12 @@ species Customer skills: [moving, simple_bdi] {
     reflex order_food
     when: state = "ordering" {
 
-        pending_orders <- pending_orders + [[
-            "customer"::self,
-            "meal"::chosen_meal,
-            "prep_time"::menu[chosen_meal],
-            "progress"::0
-        ]];
+        //pending_orders <- pending_orders + [[
+        //    "customer"::self,
+        //    "meal"::chosen_meal,
+        //    "prep_time"::menu[chosen_meal],
+        //    "progress"::0
+        //]];
 
         state <- "choose_mode";
     }

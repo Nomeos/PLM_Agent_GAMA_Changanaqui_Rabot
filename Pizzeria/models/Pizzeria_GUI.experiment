@@ -12,15 +12,28 @@ import "Machine.gaml"
 import "Counter.gaml"
 
 experiment "Pizzeria_GUI"  type:gui {
-	/** Insert here the definition of the inputs and outputs of the model */
 	
-	/** Parameters can be used to input values to the model **/
-	// parameter "First parameter" var: an_attribute_of_the_model <- an_expression;
-	parameter "Number of customers" var: nb_customers min: 1 max: 50 init: 10;
-	
-	output {
-    	/** monitors can be used to output values, either in the UI or in a file **/
-		// monitor "m1" value: an_expression;
+	parameter "Nb customers"          var: nb_customers   min: 1  max: 50  init: 10  category: "Customers";
+    parameter "Spawn rate (cycles)"   var: spawn_every    min: 1  max: 20  init: 5   category: "Customers";
+    parameter "Queue capacity"        var: queue_capacity min: 1  max: 20  init: 8   category: "Customers";
+
+    parameter "Nb cooks"              var: nb_cooks       min: 1  max: 10  init: 2   category: "Staff";
+    parameter "Cook speed"            var: cook_speed     min: 1.0 max: 5.0 init: 2.0 category: "Staff";
+    parameter "Order wait (cycles)"   var: order_wait_time min: 5 max: 30  init: 15  category: "Staff";
+
+    parameter "Nb machines"           var: nb_machines    min: 1  max: 10  init: 4   category: "Kitchen";
+    parameter "Min task (cycles)"     var: min_task_time  min: 2  max: 10  init: 5   category: "Kitchen";
+    parameter "Max task (cycles)"     var: max_task_time  min: 8  max: 25  init: 15  category: "Kitchen";
+
+    output {
+        monitor "CA total (€)"         value: restaurant_ca refresh: every(10 #cycle);
+        monitor "Commandes livrées"     value: served_customers refresh: every(10 #cycle);
+        monitor "Note restaurant"       value: restaurant_rating refresh: every(10 #cycle);
+        monitor "Clients actifs"        value: length(Customer) refresh: every(10 #cycle);
+        monitor "Cooks actifs"          value: string(length(Cook where (each.state != "idle"))) + "/" + string(length(Cook)) refresh: every(10 #cycle);
+        monitor "Machines occupées"     value: string(length(Machine where (each.is_occupied))) + "/" + string(length(Machine)) refresh: every(10 #cycle);
+        monitor "File d'attente"        value: string(length(waiting_queue)) + "/" + string(queue_capacity) refresh: every(10 #cycle);
+    
         display main type: 2d background: #whitesmoke {
 
             graphics "background" {
@@ -35,6 +48,17 @@ experiment "Pizzeria_GUI"  type:gui {
                 draw dining_area color: #orange;
                 // Entrance
                 draw entrance color: #green;
+            }
+            
+            graphics "metrics" {
+                draw rectangle(70, 28) at: {35, 14}
+                    color: rgb(0, 0, 0, 140) border: #white;
+                draw "CA : " + restaurant_ca + " €"
+                    at: {5, 7}  font: font("Arial", 8, #bold) color: #white;
+                draw "Commandes livrées : " + served_customers
+                    at: {5, 14} font: font("Arial", 8, #bold) color: #white;
+                draw "Cooks actifs : " + length(Cook where (each.state != "idle")) + "/" + length(Cook)
+                    at: {5, 21} font: font("Arial", 8, #bold) color: #white;
             }
 
             species Table aspect: base;

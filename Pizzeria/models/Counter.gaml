@@ -16,9 +16,9 @@ species Counter {
     Cook current_cook <- nil;
     
     init {
-    	static_counter_id <- static_counter_id + 1;    	
+        static_counter_id <- static_counter_id + 1;    	
         location <- {width - 50 + (static_counter_id * 8.0), dining_area.location.y + 45};
-        counter_stations +<- shape;
+        // La liste counter_stations est remplie dans le global après création
     }
     
     aspect base {
