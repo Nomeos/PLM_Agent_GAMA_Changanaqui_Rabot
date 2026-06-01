@@ -355,15 +355,13 @@ species Customer skills: [moving, simple_bdi] {
 		}
 	}
 	
-	action receive_food {
+	action receive_food(Cook from_cook) {
         waiting_for_food_time <- 0.0;
         if not takeaway {
             state <- "eating";
         } else {
-            // Takeaway: Go to the counter where the cook who served us is waiting
-            // 'myself' refers to the Cook who called this action
-            if (self != nil and self is Cook) {
-                assigned_counter <- Cook(self).target_counter;
+            if (from_cook != nil) {
+                assigned_counter <- from_cook.target_counter;
                 target <- assigned_counter.location;
                 state <- "picking_up_takeaway";
             } else {
@@ -445,16 +443,9 @@ species Customer skills: [moving, simple_bdi] {
 
                 do goto(speed: 3.0, target: target);
 
-                // Remove customer from simulation
                 if distance_to(location, target) < 2.0 {
-                	
-                	served_customers <- served_customers + 1;
-
-					restaurant_rating <- (
-					    ((restaurant_rating * (served_customers - 1)) + satisfaction)
-					    / served_customers
-					);
-                	
+                    // Update Global KPIs
+                    ask world { do update_metrics(myself.satisfaction, myself.waiting_for_food_time); }
                     do die;
                 }
             }

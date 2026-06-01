@@ -14,8 +14,8 @@ import "Machine.gaml"
 
 species Cook skills: [moving] {
 
-    string personality   <- "normal";
-    int abandon_threshold <- 6;
+    string personality; // normal, explorer, quitter
+    int abandon_threshold <- 10; 
 
     string  state          <- "idle";
     Counter target_counter <- nil;
@@ -31,10 +31,10 @@ species Cook skills: [moving] {
     int wait_at_counter <- 0;
 
     init {
-        personality <- one_of(["normal", "lazy", "explorer", "quitter"]);
-        write "Cook " + self + " personality: " + personality;
+        personality <- one_of(["normal", "explorer", "quitter"]);
     }
 
+    // --- Utility Methods ---
     int compute_tasks_total (map<string, int> order) {
         int total <- 0;
         loop item over: order.keys {
@@ -63,9 +63,7 @@ species Cook skills: [moving] {
     }
 
     Machine pick_machine (list<Machine> candidates) {
-        if personality = "lazy" {
-            return candidates with_min_of (each distance_to self);
-        } else if personality = "explorer" {
+        if personality = "explorer" {
             return candidates with_max_of (each distance_to self);
         } else {
             return one_of(candidates);
@@ -73,16 +71,17 @@ species Cook skills: [moving] {
     }
 
     reflex seek_counter when: state = "idle" {
-        // Find counters that don't have another Cook nearby
-        list<Counter> available_counters <- counter_stations where (empty(Cook at_distance 2.0 overlapping each));
+        // Proactive search: prioritize counters where a customer is waiting
+        list<Counter> busy_counters <- counter_stations where (!empty(Customer at_distance 2.0 overlapping each));
+        list<Counter> cook_free_counters <- counter_stations where (empty(Cook at_distance 2.0 overlapping each));
         
-        if length(available_counters) > 0 {
-            target_counter <- one_of(available_counters);
-        } else {
-            target_counter <- one_of(counter_stations);
-        }
+        list<Counter> candidates <- busy_counters inter cook_free_counters;
+        
+        if empty(candidates) { candidates <- cook_free_counters; }
+        if empty(candidates) { candidates <- counter_stations; }
+        
+        target_counter <- one_of(candidates);
         state <- "going_to_counter";
-        write "Cook " + self + " [" + personality + "] → counter " + target_counter;
     }
 
     reflex move_to_counter when: state = "going_to_counter" {
@@ -116,8 +115,8 @@ species Cook skills: [moving] {
             int temp_tasks <- compute_tasks_total(temp_order);
 
             if personality = "quitter" and temp_tasks > abandon_threshold {
-                write "Cook " + self + " [quitter] order too long (" + temp_tasks + " tasks), skipping!";
-                target_counter <- nil;
+                write "Cook " + self + " [quitter] gives up on huge order (" + temp_tasks + " tasks).";
+                target_counter <- nil; // Look for a new counter/customer
                 state          <- "idle";
                 return;
             }
@@ -198,15 +197,10 @@ species Cook skills: [moving] {
         do goto(speed: cook_speed, target: target_counter);
 
         if (self distance_to target_counter) < 3.5 {
-            float val       <- compute_order_value(current_order);
-            restaurant_ca   <- restaurant_ca + val;
-            served_customers <- served_customers + 1;
-
             if (my_customer != nil) {
-                ask my_customer { do receive_food; }
+                restaurant_ca <- restaurant_ca + compute_order_value(current_order);
+                ask my_customer { do receive_food(myself); }
             }
-
-            write "Cook " + self + " delivered order to " + my_customer;
 
             // Reset cook and customer reference
             target_counter <- nil;

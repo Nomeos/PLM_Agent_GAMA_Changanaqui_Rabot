@@ -55,12 +55,21 @@ global {
     
     list<map> pending_orders <- [];
     
-        // ── Métriques ──────────────────────────────────────────────────────────
+    // ── Performance Metrics ────────────────────────────────────────────────
     float restaurant_ca     <- 0.0;
-    float served_customers   <- 0;
-    float restaurant_rating <- 100.0;
+    int served_customers    <- 0;
+    float total_satisfaction <- 0.0;
+    float avg_satisfaction  <- 0.0;
     float total_wait_time   <- 0.0;
-    int min_work_duration <- 5;
+    float avg_wait_time     <- 0.0;
+
+    action update_metrics(int sat, float wait) {
+        served_customers <- served_customers + 1;
+        total_satisfaction <- total_satisfaction + sat;
+        total_wait_time <- total_wait_time + wait;
+        avg_satisfaction <- total_satisfaction / served_customers;
+        avg_wait_time <- total_wait_time / served_customers;
+    }
     	
 	init {
 		create Table number: nb_tables {
@@ -95,42 +104,23 @@ global {
 		counter_stations <- list(Counter);
 	}
 	
-	reflex update_table_count {
-
-	    // ========= AJOUT =========
-	    if length(Table) < nb_tables {
-	
-	        int missing <- nb_tables - length(Table);
-	
-	        create Table number: missing {
-	
-	            location <- any_location_in(dining_area);
-	
-	            max_capacity <- rnd(1,4);
-	
-	            occupied_seats <- 0;
-	        }
-	    }
-	
-	    // ========= SUPPRESSION =========
-	    if length(Table) > nb_tables {
-	
-	        int extra <- length(Table) - nb_tables;
-	
-	        // supprime uniquement tables vides
-	        list<Table> removable <- (
-	            Table where (each.occupied_seats = 0)
-	        );
-	
-        loop toremove over: removable {
-
-            ask toremove {
-                do die;
+    /**
+     * Maintains the table count based on simulation parameters.
+     */
+    reflex manage_furniture {
+        if length(Table) < nb_tables {
+            create Table number: (nb_tables - length(Table)) {
+                location <- any_location_in(dining_area);
+                max_capacity <- rnd(1,4);
             }
-	    }
-	}
-	
-	}
+        } else if length(Table) > nb_tables {
+            int extra <- length(Table) - nb_tables;
+            list<Table> empty_tables <- Table where (each.occupied_seats = 0);
+            if !empty(empty_tables) {
+                ask (extra min length(empty_tables)) among empty_tables { do die; }
+            }
+        }
+    }
 
 
     reflex spawn_customers when: every(spawn_every #cycle) {

@@ -27,9 +27,9 @@ experiment "Pizzeria_GUI"  type:gui {
     parameter "Max task (cycles)"     var: max_task_time  min: 8  max: 25  init: 15  category: "Kitchen";
 
     output {
-        monitor "CA total (€)"         value: restaurant_ca refresh: every(10 #cycle);
+        monitor "CA total (CHF)"         value: restaurant_ca refresh: every(10 #cycle);
         monitor "Commandes livrées"     value: served_customers refresh: every(10 #cycle);
-        monitor "Note restaurant"       value: restaurant_rating refresh: every(10 #cycle);
+        //monitor "Note restaurant"       value: restaurant_rating refresh: every(10 #cycle);
         monitor "Clients actifs"        value: length(Customer) refresh: every(10 #cycle);
         monitor "Cooks actifs"          value: string(length(Cook where (each.state != "idle"))) + "/" + string(length(Cook)) refresh: every(10 #cycle);
         monitor "Machines occupées"     value: string(length(Machine where (each.is_occupied))) + "/" + string(length(Machine)) refresh: every(10 #cycle);
