@@ -28,11 +28,12 @@ global {
     int nb_customers   <- 10;
     int nb_tables <- 10;
     int queue_capacity <- 8;
+    float lambda_arrival <- 6.0; // Mean arrivals per check
     int spawn_every    <- 5;
     list<Customer> waiting_queue <- [];
     
     // ── Paramètres cuisine ─────────────────────────────────────────────────
-    int nb_cooks    <- 2;
+    int nb_cooks    <- 4;
     int nb_machines <- 4;
     int nb_counters <- 4;
 
@@ -41,7 +42,7 @@ global {
     int max_task_time    <- 20;
     int order_wait_time  <- 15;
 
-    // ── Menu (prix → tasks/unité = round(prix/10)) ─────────────────────────
+    // ── Menu (prix -> tasks/unité = round(prix/10)) ─────────────────────────
     map<string, int> menu <- [
         "pizza_margherita" :: 15,
         "pizza_pepperoni"  :: 18,
@@ -58,17 +59,31 @@ global {
     // ── Performance Metrics ────────────────────────────────────────────────
     float restaurant_ca     <- 0.0;
     int served_customers    <- 0;
+    int unsatisfied_customers <- 0;
     float total_satisfaction <- 0.0;
     float avg_satisfaction  <- 0.0;
     float total_wait_time   <- 0.0;
     float avg_wait_time     <- 0.0;
+    
+    list<float> revenue_history <- [];
 
-    action update_metrics(int sat, float wait) {
-        served_customers <- served_customers + 1;
-        total_satisfaction <- total_satisfaction + sat;
+    action update_metrics(int sat, float wait, bool success) {
+        if (success) {
+            served_customers <- served_customers + 1;
+            total_satisfaction <- total_satisfaction + sat;
+        } else {
+            unsatisfied_customers <- unsatisfied_customers + 1;
+            restaurant_ca <- restaurant_ca - rnd(10, 30);
+        }
         total_wait_time <- total_wait_time + wait;
-        avg_satisfaction <- total_satisfaction / served_customers;
-        avg_wait_time <- total_wait_time / served_customers;
+        
+        if (served_customers > 0) {
+            avg_satisfaction <- total_satisfaction / served_customers;
+        }
+        
+        if (served_customers + unsatisfied_customers > 0) {
+            avg_wait_time <- total_wait_time / (served_customers + unsatisfied_customers);
+        }
     }
     	
 	init {
@@ -104,28 +119,52 @@ global {
 		counter_stations <- list(Counter);
 	}
 	
-    /**
-     * Maintains the table count based on simulation parameters.
-     */
-    reflex manage_furniture {
-        if length(Table) < nb_tables {
-            create Table number: (nb_tables - length(Table)) {
-                location <- any_location_in(dining_area);
-                max_capacity <- rnd(1,4);
-            }
-        } else if length(Table) > nb_tables {
-            int extra <- length(Table) - nb_tables;
-            list<Table> empty_tables <- Table where (each.occupied_seats = 0);
-            if !empty(empty_tables) {
-                ask (extra min length(empty_tables)) among empty_tables { do die; }
-            }
+    // ── Dynamic Population Management ──
+    // These reflexes allow changing agent numbers in real-time via the UI parameters.
+    
+    reflex manage_entities {
+        // Manage Tables
+        if length(Table) < nb_tables { create Table number: (nb_tables - length(Table)) { location <- any_location_in(dining_area); max_capacity <- rnd(1,4); } }
+        else if length(Table) > nb_tables { 
+            list<Table> candidates <- Table where (each.occupied_seats = 0);
+            if !empty(candidates) { ask (min([length(Table) - nb_tables, length(candidates)])) among candidates { do die; } }
+        }
+        
+        // Manage Cooks (Staffing)
+        if length(Cook) < nb_cooks { create Cook number: (nb_cooks - length(Cook)) { location <- any_location_in(kitchen); } }
+        else if length(Cook) > nb_cooks {
+            list<Cook> idle_staff <- Cook where (each.state = "idle");
+            if !empty(idle_staff) { ask (min([length(Cook) - nb_cooks, length(idle_staff)])) among idle_staff { do die; } }
+        }
+
+        // Manage Machines (Kitchen Capacity)
+        if length(Machine) < nb_machines { create Machine number: (nb_machines - length(Machine)) { location <- any_location_in(kitchen); } work_stations <- list(Machine); }
+        else if length(Machine) > nb_machines {
+            list<Machine> free_m <- Machine where (!each.is_occupied);
+            if !empty(free_m) { ask (min([length(Machine) - nb_machines, length(free_m)])) among free_m { do die; } work_stations <- list(Machine); }
+        }
+        
+        // Manage Counters
+        if length(Counter) < nb_counters { create Counter number: (nb_counters - length(Counter)); counter_stations <- list(Counter); }
+        else if length(Counter) > nb_counters {
+            list<Counter> free_c <- Counter where (!each.is_occupied);
+            if !empty(free_c) { ask (min([length(Counter) - nb_counters, length(free_c)])) among free_c { do die; } counter_stations <- list(Counter); }
         }
     }
 
+    // ── Financial Tracking ──
+    reflex track_revenue_step when: every(100 #cycle) {
+        revenue_history << restaurant_ca;
+        if (length(revenue_history) > 10) { remove from: revenue_history index: 0; }
+    }
 
+    // ── Customer Spawn Logic ──
+    // Uses a Poisson distribution to model realistic arrival patterns.
     reflex spawn_customers when: every(spawn_every #cycle) {
-        if length(Customer) < nb_customers {
-            create Customer number: 1 {
+        // Using Poisson distribution to determine number of arrivals
+        int arrivals <- poisson(lambda_arrival);
+        if arrivals > 0 and (length(Customer) < nb_customers) {
+            create Customer number: min([arrivals, nb_customers - length(Customer)]) {
                 if flip(0.5) {
                     location       <- {left_sidewalk.x,  rnd(left_sidewalk.y  - 10, left_sidewalk.y  + 10)};
                     direction_left <- false;

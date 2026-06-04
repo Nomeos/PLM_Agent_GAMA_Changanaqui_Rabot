@@ -15,7 +15,7 @@ import "Machine.gaml"
 species Cook skills: [moving] {
 
     string personality; // normal, explorer, quitter
-    int abandon_threshold <- 10; 
+    int abandon_threshold <- rnd(4, 6); 
 
     string  state          <- "idle";
     Counter target_counter <- nil;
@@ -36,17 +36,18 @@ species Cook skills: [moving] {
     }
 
     // --- Utility Methods ---
+    // increase the workload for the cook.
     int compute_tasks_total (map<string, int> order) {
         int total <- 0;
         loop item over: order.keys {
-            total <- total + max([1, round(menu[item] / 10.0)]) * order[item];
+            total <- total + max([1, round(menu[item] / 15.0)]) * order[item];
         }
         return total;
     }
 
     map<string, int> generate_order {
-        list<string> items <- shuffle(menu.keys);
-        int nb_items       <- rnd(1, length(items));
+        list<string> items <- shuffle(menu.keys); // Randomize order content
+        int nb_items       <- rnd(1, 3);
         map<string, int> order <- map([]);
         int limit <- min([nb_items, length(items)]) - 1;
         loop i from: 0 to: limit {
@@ -97,6 +98,8 @@ species Cook skills: [moving] {
         }
     }
 
+    // Interaction: Direct communication between Cook and Customer.
+    // The Cook 'picks up' the customer
     reflex wait_for_order when: state = "waiting_for_order" {
         // Find the specific customer assigned to the counter this cook is at
         list<Customer> potential_clients <- Customer where (each.state = "ordering" and each.assigned_counter = target_counter);
@@ -107,15 +110,6 @@ species Cook skills: [moving] {
             // Pre-calculate to see if personality allows taking this order
             map<string, int> temp_order <- generate_order();
             int temp_tasks <- compute_tasks_total(temp_order);
-
-            if personality = "quitter" and temp_tasks > abandon_threshold {
-                write "Cook " + self + " [quitter] rejects order from " + target_cust;
-                // Reset customer state so they can be picked up by another cook or re-order
-                ask target_cust { state <- "seeking_counter"; assigned_counter.is_occupied <- false; assigned_counter <- nil; }
-                target_counter <- nil;
-                state          <- "idle";
-                return;
-            }
 
             // Order accepted: Bind the customer and advance their state
             my_customer   <- target_cust;
@@ -128,15 +122,14 @@ species Cook skills: [moving] {
                 state <- "choose_mode";
             }
 
-            write "Cook " + self + " taking order from " + my_customer + ": " + tasks_total + " tasks total.";
             state <- "choosing_machine";
         }
     }
 
+    // Selection of work station based on personality (Explorer vs Normal)
     reflex choose_machine when: state = "choosing_machine" {
         if tasks_done >= tasks_total {
             state <- "going_back_to_counter";
-            write "Cook " + self + " finished all " + tasks_total + " tasks → delivering";
             return;
         }
 
@@ -148,8 +141,6 @@ species Cook skills: [moving] {
 
         target_machine <- pick_machine(available);
         state          <- "going_to_machine";
-        write "Cook " + self + " [" + personality + "] → machine " + target_machine
-              + " (task " + (tasks_done + 1) + "/" + tasks_total + ")";
     }
 
     reflex move_to_machine when: state = "going_to_machine" {
@@ -165,12 +156,11 @@ species Cook skills: [moving] {
                 used_machines               <- used_machines + [target_machine];
                 work_remaining              <- rnd(min_task_time, max_task_time);
                 state                       <- "working";
-                write "Cook " + self + " starts on machine " + target_machine
-                      + " for " + work_remaining + " cycles";
             }
         }
     }
 
+    // Working: task execution based on personality
     reflex work when: state = "working" {
         work_remaining <- work_remaining - 1;
         if work_remaining <= 0 {
@@ -178,10 +168,24 @@ species Cook skills: [moving] {
             target_machine.current_cook <- nil;
             tasks_done     <- tasks_done + 1;
             target_machine <- nil;
-            state          <- "choosing_machine";
+            
+            // Quitter check midway
+            if personality = "quitter" and tasks_done >= abandon_threshold and tasks_done < tasks_total {
+                if (my_customer != nil) {
+                    ask my_customer { do handle_abandonment; }
+                }
+                my_customer <- nil;
+                current_order <- map([]);
+                tasks_total <- 0;
+                tasks_done <- 0;
+                state <- "idle";
+            } else {
+                state          <- "choosing_machine";
+            }
         }
     }
 
+    // Finalizing order: Returning to customer to deliver food
     reflex go_back_to_counter when: state = "going_back_to_counter" {
         if target_counter = nil { state <- "idle"; return; }
 
@@ -206,22 +210,12 @@ species Cook skills: [moving] {
     }
 
     aspect base {
-        rgb cook_color <- #blue;
-        if state = "working" { cook_color <- #green; }
-        else if state = "going_to_machine" or state = "going_to_counter" or state = "going_back_to_counter" { 
-            cook_color <- #orange; 
-        }
-        else if state = "waiting_for_order" { cook_color <- #cyan; }
-        else if state = "choosing_machine" { cook_color <- #yellow; }
+        rgb my_cook_color <- #cyan;
+        if state = "working" { my_cook_color <- #green; }
+        if state = "moving_to_station" { my_cook_color <- #orange; }
+        if state = "waiting" { my_cook_color <- #cyan; }
         
-        rgb border_color <- #white;
-        if personality = "explorer" { border_color <- #purple; }
-        else if personality = "quitter" { border_color <- #red; }
-
-        draw circle(3.0) color: cook_color border: border_color;
-
-        string label <- "[" + first(personality) + "] " + state;
-        if tasks_total > 0 { label <- label + " (" + tasks_done + "/" + tasks_total + ")"; }
-        draw label font: font("Arial", 6, #plain) at: {location.x, location.y - 5} color: #black;
+        draw circle(2.5) color: my_cook_color border: #white;
+        draw state font: font("Arial", 6, #plain) at: {location.x, location.y - 4} color: #black;
     }
 }

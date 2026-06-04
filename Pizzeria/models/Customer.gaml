@@ -144,13 +144,16 @@ species Customer skills: [moving] {
     when: state = "deciding" {
 
         // 60% chance to enter if queue is not too large
-        if flip(hunger) and length(waiting_queue) < 8 {
+        //if flip(hunger) and length(waiting_queue) < 8 {
 
+        // Probability based on Poisson arrival rate vs Hunger
+        // P(k>0) = 1 - exp(-lambda)
+        float arrival_prob <- 1 - exp(-lambda_arrival);
+        
+        if flip(arrival_prob * (hunger/100)) and length(waiting_queue) < 8 {
             state <- "entering";
             target <- inside_point;
-
         } else {
-
             // Otherwise leave immediately
             state <- "leaving";
             target <- location + {rnd(-20,20), rnd(-20,20)};
@@ -218,7 +221,10 @@ species Customer skills: [moving] {
         if (queue_wait_time > effective_food_wait) {
             if (assigned_counter != nil) { assigned_counter.is_occupied <- false; assigned_counter <- nil; }
             if (assigned_table != nil) { assigned_table.occupied_seats <- assigned_table.occupied_seats - 1; assigned_table <- nil; }
-            state <- "leaving";
+            
+            satisfaction <- 0;
+            ask world { do update_metrics(myself.satisfaction, myself.queue_wait_time, false); }
+            state <- "leaving_frustrated";
         }
     }
 
@@ -348,7 +354,7 @@ species Customer skills: [moving] {
 		        assigned_table <- nil;
 		    }
 		
-		    state <- "leaving";
+		    state <- "leaving_frustrated";
 		}
 	}
 	
@@ -407,6 +413,14 @@ species Customer skills: [moving] {
         }
     }
 
+    action handle_abandonment {
+        do change_satisfaction(-50);
+        if (assigned_counter != nil) { assigned_counter.is_occupied <- false; assigned_counter <- nil; }
+        if (assigned_table != nil) { assigned_table.occupied_seats <- assigned_table.occupied_seats - 1; assigned_table <- nil; }
+        ask world { do update_metrics(myself.satisfaction, 0.0, false); }
+        state <- "leaving_frustrated";
+    }
+
     /****************************************
      *              LEAVING
      ****************************************/
@@ -442,10 +456,30 @@ species Customer skills: [moving] {
 
                 if distance_to(location, target) < 2.0 {
                     // Update Global KPIs
-                    ask world { do update_metrics(myself.satisfaction, myself.waiting_for_food_time); }
+                    ask world { do update_metrics(myself.satisfaction, myself.waiting_for_food_time, true); }
                     do die;
                 }
             }
+        }
+    }
+    
+    reflex leave_frustrated
+    when: state = "leaving_frustrated" {
+        target <- entrance.location;
+        do goto(speed: 3.5, target: target); // Walk faster when angry
+        
+        if distance_to(location, target) < 4.0 {
+            is_in <- false;
+            state <- "leaving_frustrated_outside";
+        }
+    }
+    
+    reflex leave_frustrated_outside
+    when: state = "leaving_frustrated_outside" {
+        target <- direction_left ? left_sidewalk : right_sidewalk;
+        do goto(speed: 3.5, target: target);
+        if distance_to(location, target) < 1.0 {
+            do die;
         }
     }
     
