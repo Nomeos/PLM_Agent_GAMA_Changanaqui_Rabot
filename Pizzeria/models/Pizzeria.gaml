@@ -28,7 +28,8 @@ global {
     int nb_customers   <- 10;
     int nb_tables <- 10;
     int queue_capacity <- 8;
-    float lambda_arrival <- 6.0; // Mean arrivals per check
+    float lambda_arrival <- 2.0;
+    string traffic_period <- "Normal"; 
     int spawn_every    <- 5;
     list<Customer> waiting_queue <- [];
     
@@ -62,6 +63,7 @@ global {
     float avg_satisfaction    <- 100.0;
     float total_wait_time     <- 0.0;
     float avg_wait_time     <- 0.0;
+    int total_customers_entered <- 0;
     
     list<float> revenue_history <- [];
     map<string, int> item_usage <- []; // Tracks total units sold per item
@@ -120,10 +122,7 @@ global {
 		work_stations    <- list(Machine);
 		counter_stations <- list(Counter);
 	}
-	
-    // ── Dynamic Population Management ──
-    // These reflexes allow changing agent numbers in real-time via the UI parameters.
-    
+	    
     reflex manage_entities {
         // Manage Tables
         if length(Table) < nb_tables { create Table number: (nb_tables - length(Table)) { location <- any_location_in(dining_area); max_capacity <- rnd(1,4); } }
@@ -154,7 +153,21 @@ global {
         }
     }
 
-    // ── Financial Tracking ──
+    // Simulates a 24-hour cycle over 3000 steps
+    reflex update_dynamic_traffic {
+        int day_step <- cycle mod 3000;
+        
+        if (day_step >= 800 and day_step <= 1300) {
+            lambda_arrival <- 7.5; traffic_period <- "Lunch Rush";
+        } else if (day_step >= 1900 and day_step <= 2500) {
+            lambda_arrival <- 9.0; traffic_period <- "Dinner Peak";
+        } else if (day_step > 2700 or day_step < 400) {
+            lambda_arrival <- 0.2; traffic_period <- "Night / Cleaning";
+        } else {
+            lambda_arrival <- 2.0; traffic_period <- "Normal Service";
+        }
+    }
+
     reflex track_revenue_step when: every(1000 #cycle) {
         // Calculate what % of total CA was made in the last 100 steps
         float delta <- restaurant_ca - last_revenue_checkpoint;
@@ -165,7 +178,6 @@ global {
         if (length(revenue_history) > 10) { remove from: revenue_history index: 0; }
     }
 
-    // ── Customer Spawn Logic ──
     // Uses a Poisson distribution to model realistic arrival patterns.
     reflex spawn_customers when: every(spawn_every #cycle) {
         // Using Poisson distribution to determine number of arrivals

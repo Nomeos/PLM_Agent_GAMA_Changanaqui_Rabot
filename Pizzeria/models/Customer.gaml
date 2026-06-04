@@ -153,6 +153,7 @@ species Customer skills: [moving] {
         if flip(arrival_prob * (hunger/100)) and length(waiting_queue) < 8 {
             state <- "entering";
             target <- inside_point;
+            ask world { total_customers_entered <- total_customers_entered + 1; }
         } else {
             // Otherwise leave immediately
             state <- "leaving";
