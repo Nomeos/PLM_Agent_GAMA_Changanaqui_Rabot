@@ -36,6 +36,7 @@ global {
     int nb_cooks    <- 4;
     int nb_machines <- 4;
     int nb_counters <- 4;
+    int static_counter_id <- 0;
 
     float cook_speed     <- 2.0;
     int min_task_time    <- 5;
@@ -52,37 +53,33 @@ global {
 
     list<Machine> work_stations    <- [];
     list<Counter> counter_stations <- [];
-    int static_counter_id <- 0;
-    
-    list<map> pending_orders <- [];
     
     // ── Performance Metrics ────────────────────────────────────────────────
     float restaurant_ca     <- 0.0;
     int served_customers    <- 0;
     int unsatisfied_customers <- 0;
     float total_satisfaction <- 0.0;
-    float avg_satisfaction  <- 0.0;
-    float total_wait_time   <- 0.0;
+    float avg_satisfaction    <- 100.0;
+    float total_wait_time     <- 0.0;
     float avg_wait_time     <- 0.0;
     
     list<float> revenue_history <- [];
+    map<string, int> item_usage <- []; // Tracks total units sold per item
+    float last_revenue_checkpoint <- 0.0;
+    float revenue_velocity_pct <- 0.0;
 
+    // Updates global KPIs based on customer outcomes
     action update_metrics(int sat, float wait, bool success) {
-        if (success) {
-            served_customers <- served_customers + 1;
-            total_satisfaction <- total_satisfaction + sat;
-        } else {
-            unsatisfied_customers <- unsatisfied_customers + 1;
-            restaurant_ca <- restaurant_ca - rnd(10, 30);
-        }
+        if (success) { served_customers <- served_customers + 1; } 
+        else { unsatisfied_customers <- unsatisfied_customers + 1; restaurant_ca <- restaurant_ca - rnd(10, 30); }
+        
+        total_satisfaction <- total_satisfaction + sat;
         total_wait_time <- total_wait_time + wait;
         
-        if (served_customers > 0) {
-            avg_satisfaction <- total_satisfaction / served_customers;
-        }
-        
+        // The average now includes unsatisfied customers (sat=0) to reflect overall performance
         if (served_customers + unsatisfied_customers > 0) {
-            avg_wait_time <- total_wait_time / (served_customers + unsatisfied_customers);
+            avg_satisfaction <- total_satisfaction / (served_customers + unsatisfied_customers);
+            avg_wait_time    <- total_wait_time / (served_customers + unsatisfied_customers);
         }
     }
     	
@@ -92,6 +89,11 @@ global {
 		    max_capacity   <- rnd(1, 4);
 		    occupied_seats <- 0;
 		 }
+
+        // Initialize item usage tracking
+        loop k over: menu.keys {
+            item_usage[k] <- 0;
+        }
 	
 		create Customer number: nb_customers {
 			if flip(0.5) {
@@ -153,7 +155,12 @@ global {
     }
 
     // ── Financial Tracking ──
-    reflex track_revenue_step when: every(100 #cycle) {
+    reflex track_revenue_step when: every(1000 #cycle) {
+        // Calculate what % of total CA was made in the last 100 steps
+        float delta <- restaurant_ca - last_revenue_checkpoint;
+        revenue_velocity_pct <- (restaurant_ca > 0) ? (delta / restaurant_ca) * 100 : 0.0;
+        last_revenue_checkpoint <- restaurant_ca;
+        
         revenue_history << restaurant_ca;
         if (length(revenue_history) > 10) { remove from: revenue_history index: 0; }
     }

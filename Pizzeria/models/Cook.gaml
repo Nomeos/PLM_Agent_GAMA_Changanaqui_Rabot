@@ -8,6 +8,10 @@
 
 model Cook
 
+/**
+ * The Cook agent manages the lifecycle of an order: from greeting the customer 
+ * to processing tasks at various machines and delivering the final product.
+ */
 import "Pizzeria.gaml"
 import "Counter.gaml"
 import "Machine.gaml"
@@ -29,8 +33,6 @@ species Cook skills: [moving] {
     int work_remaining <- 0;
     list<Machine> used_machines <- [];
 
-    int wait_at_counter <- 0;
-
     init {
         personality <- one_of(["normal", "explorer", "quitter"]);
     }
@@ -45,6 +47,7 @@ species Cook skills: [moving] {
         return total;
     }
 
+    // Procedural generation of a customer's command
     map<string, int> generate_order {
         list<string> items <- shuffle(menu.keys); // Randomize order content
         int nb_items       <- rnd(1, 3);
@@ -117,6 +120,11 @@ species Cook skills: [moving] {
             tasks_total   <- temp_tasks;
             tasks_done    <- 0;
             used_machines <- [];
+
+            // Update global item popularity statistics
+            loop item over: current_order.keys {
+                ask world { item_usage[item] <- item_usage[item] + myself.current_order[item]; }
+            }
 
             ask my_customer {
                 state <- "choose_mode";

@@ -160,7 +160,7 @@ species Customer skills: [moving] {
         }
     }
 
-    // Move inside the restaurant
+    // Transition from sidewalk to the pizzeria
     reflex enter
     when: state = "entering" {
 
@@ -216,6 +216,7 @@ species Customer skills: [moving] {
         }
     }
 
+    // Global patience monitor: if the customer waits too long in any service state, they leave
     reflex check_patience when: (state = "ordering" or state = "waiting_for_counter" or state = "waiting_food") {
         queue_wait_time <- queue_wait_time + 1;
         if (queue_wait_time > effective_food_wait) {
